@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Brand Engine</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h1>Brand Engine</h1>
+        <p>Pick a workspace</p>
+      </div>
+      <ul class="brand-list" id="brandList"></ul>
+      <button id="newBrandBtn" style="width:100%">+ New brand</button>
+    </div>
+
+    <div class="main">
+      <div class="empty-state" id="emptyState">
+        <h2 style="margin-bottom:8px">No brand selected</h2>
+        <p class="muted">Choose a brand on the left, or create a new one to get started.</p>
+      </div>
+
+      <div id="newBrandForm" style="display:none; max-width:400px">
+        <h2 style="margin-bottom:16px">New brand workspace</h2>
+        <div class="field">
+          <label>Brand name</label>
+          <input id="newBrandName" placeholder="e.g. Acme Running Co." />
+        </div>
+        <div class="row">
+          <button id="createBrandBtn">Create workspace</button>
+          <button class="secondary" id="cancelNewBrandBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const brandListEl = document.getElementById('brandList');
+    const emptyState = document.getElementById('emptyState');
+    const newBrandForm = document.getElementById('newBrandForm');
+
+    async function loadBrands() {
+      const brands = await api('/brands');
+      brandListEl.innerHTML = '';
+      brands.forEach((b) => {
+        const li = document.createElement('li');
+        li.className = 'brand-item';
+        li.innerHTML = `
+          <span class="swatch" style="background:${colorForName(b.name)}"></span>
+          <span class="name">${escapeHtml(b.name)}</span>
+        `;
+        li.addEventListener('click', () => {
+          window.location.href = `/brand.html?id=${b.id}`;
+        });
+        brandListEl.appendChild(li);
+      });
+    }
+
+    document.getElementById('newBrandBtn').addEventListener('click', () => {
+      emptyState.style.display = 'none';
+      newBrandForm.style.display = 'block';
+    });
+
+    document.getElementById('cancelNewBrandBtn').addEventListener('click', () => {
+      newBrandForm.style.display = 'none';
+      emptyState.style.display = 'block';
+    });
+
+    document.getElementById('createBrandBtn').addEventListener('click', async () => {
+      const name = document.getElementById('newBrandName').value.trim();
+      if (!name) return;
+      const brand = await api('/brands', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      window.location.href = `/brand.html?id=${brand.id}`;
+    });
+
+    loadBrands();
+  </script>
+</body>
+</html>

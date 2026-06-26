@@ -1,0 +1,202 @@
+/* style.css
+   A calm, "system" aesthetic: paper background, ink text,
+   indigo for active/action states, mono type for anything that's
+   data (ids, timestamps, status) rather than prose. */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --paper: #f5f4f1;
+  --panel: #ffffff;
+  --ink: #1c1b1a;
+  --ink-soft: #5b5853;
+  --border: #e4e2dd;
+  --accent: #4f46e5;
+  --accent-soft: #ece9fe;
+  --good: #5f8f6e;
+  --good-soft: #e7f0e9;
+  --bad: #c2492f;
+  --bad-soft: #f7e7e1;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1, h2, h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  margin: 0;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+a { color: var(--accent); text-decoration: none; }
+
+button {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 9px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button:hover { opacity: 0.85; }
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+button.danger {
+  background: transparent;
+  color: var(--bad);
+  border: 1px solid var(--bad);
+}
+
+input, textarea {
+  width: 100%;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+textarea { resize: vertical; min-height: 70px; }
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.field { margin-bottom: 16px; }
+
+/* --- App shell --- */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 24px 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  margin-bottom: 20px;
+}
+.sidebar-header h1 { font-size: 18px; }
+.sidebar-header p { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+
+.brand-list { list-style: none; padding: 0; margin: 0 0 16px; }
+.brand-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+.brand-item:hover { background: var(--paper); }
+.brand-item.active { background: var(--accent-soft); }
+.brand-item .swatch {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.brand-item .name { font-weight: 500; font-size: 14px; }
+
+.main {
+  flex: 1;
+  padding: 32px 40px;
+  max-width: 880px;
+}
+
+.empty-state {
+  color: var(--ink-soft);
+  margin-top: 60px;
+  text-align: center;
+}
+
+/* --- Tabs --- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.tab {
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  border-bottom: 2px solid transparent;
+}
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* --- Cards / lists --- */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.status-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.status-tag.pending { background: #eee; color: var(--ink-soft); }
+.status-tag.approved { background: var(--good-soft); color: var(--good); }
+.status-tag.rejected { background: var(--bad-soft); color: var(--bad); }
+
+.output-text {
+  white-space: pre-wrap;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.row { display: flex; gap: 8px; }
+.row.between { justify-content: space-between; align-items: center; }
+
+.muted { color: var(--ink-soft); font-size: 13px; }

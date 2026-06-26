@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Brand Engine</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h1><a href="/" style="color:inherit">Brand Engine</a></h1>
+        <p>Pick a workspace</p>
+      </div>
+      <ul class="brand-list" id="brandList"></ul>
+      <button id="newBrandBtn" style="width:100%">+ New brand</button>
+    </div>
+
+    <div class="main">
+      <div class="row between" style="margin-bottom:18px">
+        <h2 id="brandName">Loading…</h2>
+        <button class="danger" id="deleteBrandBtn">Delete brand</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="pov">Point of view</div>
+        <div class="tab" data-tab="assets">Reference material</div>
+        <div class="tab" data-tab="generate">Generate</div>
+        <div class="tab" data-tab="history">History</div>
+      </div>
+
+      <!-- POV TAB -->
+      <div class="tab-panel active" id="panel-pov">
+        <p class="muted" style="margin-bottom:18px">
+          This is the judgement layer - what makes output sound like THIS brand,
+          not a generic AI answer. Fill in as much as you have; you can always refine it later.
+        </p>
+        <div class="field">
+          <label>Insights</label>
+          <textarea id="pov-insights" placeholder="What do we know about our audience that others miss?"></textarea>
+        </div>
+        <div class="field">
+          <label>Values</label>
+          <textarea id="pov-core_values" placeholder="What does this brand stand for?"></textarea>
+        </div>
+        <div class="field">
+          <label>Beliefs</label>
+          <textarea id="pov-beliefs" placeholder="What does this brand believe to be true about the world or its category?"></textarea>
+        </div>
+        <div class="field">
+          <label>Taste</label>
+          <textarea id="pov-taste" placeholder="Aesthetic preferences - what looks/sounds/feels right vs. wrong for this brand?"></textarea>
+        </div>
+        <div class="field">
+          <label>Judgement principles</label>
+          <textarea id="pov-judgement" placeholder="Rules of thumb this brand uses to decide if something is good enough to ship."></textarea>
+        </div>
+        <div class="field">
+          <label>POV statement</label>
+          <textarea id="pov-pov_statement" placeholder="One or two sentences: this brand's stake in the ground."></textarea>
+        </div>
+        <div class="field">
+          <label>Voice rules</label>
+          <textarea id="pov-voice_rules" placeholder="Tone of voice do's and don'ts."></textarea>
+        </div>
+        <button id="savePovBtn">Save point of view</button>
+        <span class="muted" id="povSaveStatus" style="margin-left:10px"></span>
+      </div>
+
+      <!-- ASSETS TAB -->
+      <div class="tab-panel" id="panel-assets">
+        <p class="muted" style="margin-bottom:18px">
+          Paste in reference material - brand guidelines, past campaign copy, product info.
+          The generator reads all of this for context.
+        </p>
+        <div class="card">
+          <div class="field">
+            <label>Title</label>
+            <input id="assetTitle" placeholder="e.g. 2026 brand guidelines - voice section" />
+          </div>
+          <div class="field">
+            <label>Content</label>
+            <textarea id="assetContent" style="min-height:120px" placeholder="Paste text here…"></textarea>
+          </div>
+          <button id="addAssetBtn">Add reference material</button>
+        </div>
+        <div id="assetList"></div>
+      </div>
+
+      <!-- GENERATE TAB -->
+      <div class="tab-panel" id="panel-generate">
+        <div class="field">
+          <label>What do you want to generate?</label>
+          <textarea id="generatePrompt" style="min-height:100px" placeholder="e.g. Write 3 Instagram captions announcing our new product line."></textarea>
+        </div>
+        <button id="generateBtn">Generate</button>
+        <span class="muted" id="generateStatus" style="margin-left:10px"></span>
+        <div id="generateResult" style="margin-top:20px"></div>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div class="tab-panel" id="panel-history">
+        <div id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const brandId = new URLSearchParams(window.location.search).get('id');
+    if (!brandId) window.location.href = '/';
+
+    const brandListEl = document.getElementById('brandList');
+    const brandNameEl = document.getElementById('brandName');
+
+    // --- Sidebar (same switcher as index.html) ---
+    async function loadSidebar() {
+      const brands = await api('/brands');
+      brandListEl.innerHTML = '';
+      brands.forEach((b) => {
+        const li = document.createElement('li');
+        li.className = 'brand-item' + (String(b.id) === brandId ? ' active' : '');
+        li.innerHTML = `
+          <span class="swatch" style="background:${colorForName(b.name)}"></span>
+          <span class="name">${escapeHtml(b.name)}</span>
+        `;
+        li.addEventListener('click', () => {
+          window.location.href = `/brand.html?id=${b.id}`;
+        });
+        brandListEl.appendChild(li);
+        if (String(b.id) === brandId) brandNameEl.textContent = b.name;
+      });
+    }
+
+    document.getElementById('newBrandBtn').addEventListener('click', () => {
+      window.location.href = '/';
+    });
+
+    document.getElementById('deleteBrandBtn').addEventListener('click', async () => {
+      if (!confirm('Delete this brand and everything in its workspace? This cannot be undone.')) return;
+      await api(`/brands/${brandId}`, { method: 'DELETE' });
+      window.location.href = '/';
+    });
+
+    // --- Tabs ---
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
+      });
+    });
+
+    // --- POV ---
+    const povFields = ['insights', 'core_values', 'beliefs', 'taste', 'judgement', 'pov_statement', 'voice_rules'];
+
+    async function loadPov() {
+      const pov = await api(`/brands/${brandId}/pov`);
+      povFields.forEach((f) => {
+        document.getElementById(`pov-${f}`).value = pov[f] || '';
+      });
+    }
+
+    document.getElementById('savePovBtn').addEventListener('click', async () => {
+      const body = {};
+      povFields.forEach((f) => { body[f] = document.getElementById(`pov-${f}`).value; });
+      await api(`/brands/${brandId}/pov`, { method: 'PUT', body: JSON.stringify(body) });
+      const status = document.getElementById('povSaveStatus');
+      status.textContent = 'Saved.';
+      setTimeout(() => (status.textContent = ''), 2000);
+    });
+
+    // --- Assets ---
+    async function loadAssets() {
+      const assets = await api(`/brands/${brandId}/assets`);
+      const list = document.getElementById('assetList');
+      list.innerHTML = '';
+      assets.forEach((a) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-head">
+            <strong>${escapeHtml(a.title)}</strong>
+            <button class="secondary" data-id="${a.id}" style="padding:4px 10px;font-size:12px">Remove</button>
+          </div>
+          <p class="muted" style="white-space:pre-wrap">${escapeHtml(a.content.slice(0, 300))}${a.content.length > 300 ? '…' : ''}</p>
+        `;
+        card.querySelector('button').addEventListener('click', async () => {
+          await api(`/brands/${brandId}/assets/${a.id}`, { method: 'DELETE' });
+          loadAssets();
+        });
+        list.appendChild(card);
+      });
+    }
+
+    document.getElementById('addAssetBtn').addEventListener('click', async () => {
+      const title = document.getElementById('assetTitle').value.trim();
+      const content = document.getElementById('assetContent').value.trim();
+      if (!title || !content) return;
+      await api(`/brands/${brandId}/assets`, {
+        method: 'POST',
+        body: JSON.stringify({ title, content }),
+      });
+      document.getElementById('assetTitle').value = '';
+      document.getElementById('assetContent').value = '';
+      loadAssets();
+    });
+
+    // --- Generate ---
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const prompt = document.getElementById('generatePrompt').value.trim();
+      if (!prompt) return;
+      const status = document.getElementById('generateStatus');
+      const resultEl = document.getElementById('generateResult');
+      status.textContent = 'Generating…';
+      resultEl.innerHTML = '';
+      try {
+        const result = await api(`/brands/${brandId}/generate`, {
+          method: 'POST',
+          body: JSON.stringify({ prompt }),
+        });
+        status.textContent = '';
+        resultEl.innerHTML = `
+          <div class="card">
+            <div class="output-text">${escapeHtml(result.output)}</div>
+            <div class="row">
+              <button data-status="approved" data-id="${result.id}">Approve</button>
+              <button class="secondary" data-status="rejected" data-id="${result.id}">Reject</button>
+            </div>
+          </div>
+        `;
+        resultEl.querySelectorAll('button').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            await api(`/brands/${brandId}/generations/${btn.dataset.id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ status: btn.dataset.status }),
+            });
+            resultEl.innerHTML = `<p class="muted">Marked as ${btn.dataset.status}.</p>`;
+          });
+        });
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+
+    // --- History ---
+    async function loadHistory() {
+      const rows = await api(`/brands/${brandId}/generations`);
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      if (rows.length === 0) {
+        list.innerHTML = '<p class="muted">No generations yet.</p>';
+        return;
+      }
+      rows.forEach((r) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-head">
+            <span class="mono muted">${new Date(r.created_at).toLocaleString()}</span>
+            <span class="status-tag ${r.status}">${r.status}</span>
+          </div>
+          <p><strong>${escapeHtml(r.prompt)}</strong></p>
+          <div class="output-text">${escapeHtml(r.output || '')}</div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    // Refresh history whenever that tab is opened
+    document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory);
+
+    // --- Init ---
+    loadSidebar();
+    loadPov();
+    loadAssets();
+  </script>
+</body>
+</html>
