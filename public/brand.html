@@ -89,9 +89,45 @@
 
       <!-- GENERATE TAB -->
       <div class="tab-panel" id="panel-generate">
+        <p class="muted" style="margin-bottom:16px">
+          Pick the destination first — Claude gets exact format and length constraints, so the first output is almost always right.
+        </p>
+
+        <div class="spec-grid">
+          <div class="field" style="margin-bottom:0">
+            <label>Format</label>
+            <select id="specFormat">
+              <option value="">— Any —</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Platform</label>
+            <select id="specPlatform" disabled>
+              <option value="">—</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Placement</label>
+            <select id="specPlacement" disabled>
+              <option value="">—</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Size / Duration</label>
+            <select id="specSize" disabled>
+              <option value="">—</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="spec-resolved" id="specResolved" style="display:none">
+          Claude will write: <strong id="specContentType"></strong>
+          <span class="muted" id="specDimLabel"></span>
+        </div>
+
         <div class="field">
-          <label>What do you want to generate?</label>
-          <textarea id="generatePrompt" style="min-height:100px" placeholder="e.g. Write 3 Instagram captions announcing our new product line."></textarea>
+          <label>Brief / idea</label>
+          <textarea id="generatePrompt" style="min-height:90px" placeholder="Describe the message, campaign angle, or brief. The spec above handles format and length — focus on the idea here."></textarea>
         </div>
         <button id="generateBtn">Generate</button>
         <span class="muted" id="generateStatus" style="margin-left:10px"></span>
@@ -113,7 +149,7 @@
     const brandListEl = document.getElementById('brandList');
     const brandNameEl = document.getElementById('brandName');
 
-    // --- Sidebar (same switcher as index.html) ---
+    // --- Sidebar ---
     async function loadSidebar() {
       const brands = await api('/brands');
       brandListEl.innerHTML = '';
@@ -124,18 +160,13 @@
           <span class="swatch" style="background:${colorForName(b.name)}"></span>
           <span class="name">${escapeHtml(b.name)}</span>
         `;
-        li.addEventListener('click', () => {
-          window.location.href = `/brand.html?id=${b.id}`;
-        });
+        li.addEventListener('click', () => { window.location.href = `/brand.html?id=${b.id}`; });
         brandListEl.appendChild(li);
         if (String(b.id) === brandId) brandNameEl.textContent = b.name;
       });
     }
 
-    document.getElementById('newBrandBtn').addEventListener('click', () => {
-      window.location.href = '/';
-    });
-
+    document.getElementById('newBrandBtn').addEventListener('click', () => { window.location.href = '/'; });
     document.getElementById('deleteBrandBtn').addEventListener('click', async () => {
       if (!confirm('Delete this brand and everything in its workspace? This cannot be undone.')) return;
       await api(`/brands/${brandId}`, { method: 'DELETE' });
@@ -154,14 +185,10 @@
 
     // --- POV ---
     const povFields = ['insights', 'core_values', 'beliefs', 'taste', 'judgement', 'pov_statement', 'voice_rules'];
-
     async function loadPov() {
       const pov = await api(`/brands/${brandId}/pov`);
-      povFields.forEach((f) => {
-        document.getElementById(`pov-${f}`).value = pov[f] || '';
-      });
+      povFields.forEach((f) => { document.getElementById(`pov-${f}`).value = pov[f] || ''; });
     }
-
     document.getElementById('savePovBtn').addEventListener('click', async () => {
       const body = {};
       povFields.forEach((f) => { body[f] = document.getElementById(`pov-${f}`).value; });
@@ -193,38 +220,158 @@
         list.appendChild(card);
       });
     }
-
     document.getElementById('addAssetBtn').addEventListener('click', async () => {
       const title = document.getElementById('assetTitle').value.trim();
       const content = document.getElementById('assetContent').value.trim();
       if (!title || !content) return;
-      await api(`/brands/${brandId}/assets`, {
-        method: 'POST',
-        body: JSON.stringify({ title, content }),
-      });
+      await api(`/brands/${brandId}/assets`, { method: 'POST', body: JSON.stringify({ title, content }) });
       document.getElementById('assetTitle').value = '';
       document.getElementById('assetContent').value = '';
       loadAssets();
+    });
+
+    // --- Spec selector (cascading dropdowns) ---
+    let allSpecs = [];
+
+    async function loadSpecs() {
+      allSpecs = await api('/specs');
+      const formats = [...new Set(allSpecs.map((s) => s.format))].sort();
+      const fmtEl = document.getElementById('specFormat');
+      formats.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f.charAt(0).toUpperCase() + f.slice(1);
+        fmtEl.appendChild(opt);
+      });
+    }
+
+    function populateSelect(el, values, placeholder) {
+      el.innerHTML = `<option value="">${placeholder}</option>`;
+      values.forEach((v) => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+        el.appendChild(opt);
+      });
+      el.disabled = values.length === 0;
+    }
+
+    document.getElementById('specFormat').addEventListener('change', (e) => {
+      const fmt = e.target.value;
+      const platEl = document.getElementById('specPlatform');
+      const placeEl = document.getElementById('specPlacement');
+      const sizeEl = document.getElementById('specSize');
+
+      if (!fmt) {
+        populateSelect(platEl, [], '—');
+        populateSelect(placeEl, [], '—');
+        populateSelect(sizeEl, [], '—');
+        platEl.disabled = placeEl.disabled = sizeEl.disabled = true;
+        document.getElementById('specResolved').style.display = 'none';
+        return;
+      }
+      const platforms = [...new Set(allSpecs.filter((s) => s.format === fmt).map((s) => s.platform))].sort();
+      populateSelect(platEl, platforms, '— Pick platform —');
+      populateSelect(placeEl, [], '—');
+      populateSelect(sizeEl, [], '—');
+      placeEl.disabled = sizeEl.disabled = true;
+      document.getElementById('specResolved').style.display = 'none';
+    });
+
+    document.getElementById('specPlatform').addEventListener('change', (e) => {
+      const fmt = document.getElementById('specFormat').value;
+      const plat = e.target.value;
+      const placeEl = document.getElementById('specPlacement');
+      const sizeEl = document.getElementById('specSize');
+
+      if (!plat) {
+        populateSelect(placeEl, [], '—');
+        populateSelect(sizeEl, [], '—');
+        placeEl.disabled = sizeEl.disabled = true;
+        document.getElementById('specResolved').style.display = 'none';
+        return;
+      }
+      const placements = [...new Set(allSpecs.filter((s) => s.format === fmt && s.platform === plat).map((s) => s.placement))].sort();
+      populateSelect(placeEl, placements, '— Pick placement —');
+      populateSelect(sizeEl, [], '—');
+      sizeEl.disabled = true;
+      document.getElementById('specResolved').style.display = 'none';
+    });
+
+    document.getElementById('specPlacement').addEventListener('change', (e) => {
+      const fmt = document.getElementById('specFormat').value;
+      const plat = document.getElementById('specPlatform').value;
+      const place = e.target.value;
+      const sizeEl = document.getElementById('specSize');
+
+      if (!place) {
+        populateSelect(sizeEl, [], '—');
+        sizeEl.disabled = true;
+        document.getElementById('specResolved').style.display = 'none';
+        return;
+      }
+      const matches = allSpecs.filter((s) => s.format === fmt && s.platform === plat && s.placement === place);
+      sizeEl.innerHTML = '<option value="">— Pick size —</option>';
+      matches.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.size;
+        opt.textContent = s.size_label;
+        sizeEl.appendChild(opt);
+      });
+      sizeEl.disabled = false;
+      document.getElementById('specResolved').style.display = 'none';
+    });
+
+    document.getElementById('specSize').addEventListener('change', (e) => {
+      const fmt = document.getElementById('specFormat').value;
+      const plat = document.getElementById('specPlatform').value;
+      const place = document.getElementById('specPlacement').value;
+      const size = e.target.value;
+
+      if (!size) { document.getElementById('specResolved').style.display = 'none'; return; }
+
+      const spec = allSpecs.find((s) => s.format === fmt && s.platform === plat && s.placement === place && s.size === size);
+      if (spec) {
+        document.getElementById('specContentType').textContent = spec.content_type;
+        document.getElementById('specDimLabel').textContent =
+          spec.dimensions !== '—' ? `· ${spec.dimensions}` : '';
+        document.getElementById('specResolved').style.display = 'flex';
+      }
     });
 
     // --- Generate ---
     document.getElementById('generateBtn').addEventListener('click', async () => {
       const prompt = document.getElementById('generatePrompt').value.trim();
       if (!prompt) return;
+
+      const format   = document.getElementById('specFormat').value;
+      const platform = document.getElementById('specPlatform').value;
+      const placement= document.getElementById('specPlacement').value;
+      const size     = document.getElementById('specSize').value;
+
       const status = document.getElementById('generateStatus');
       const resultEl = document.getElementById('generateResult');
       status.textContent = 'Generating…';
       resultEl.innerHTML = '';
+
       try {
+        const body = { prompt };
+        if (format && platform && placement && size) {
+          body.format = format; body.platform = platform;
+          body.placement = placement; body.size = size;
+        }
+
         const result = await api(`/brands/${brandId}/generate`, {
           method: 'POST',
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify(body),
         });
+
         status.textContent = '';
         resultEl.innerHTML = `
           <div class="card">
+            ${result.content_type ? `<p class="muted" style="margin-bottom:8px">${escapeHtml(result.content_type)} · ${escapeHtml(result.platform || '')} ${escapeHtml(result.placement || '')} ${escapeHtml(result.size || '')}</p>` : ''}
             <div class="output-text">${escapeHtml(result.output)}</div>
-            <div class="row">
+            <div class="row" style="margin-top:12px">
               <button data-status="approved" data-id="${result.id}">Approve</button>
               <button class="secondary" data-status="rejected" data-id="${result.id}">Reject</button>
             </div>
@@ -254,27 +401,35 @@
         return;
       }
       rows.forEach((r) => {
+        const specChips = [r.format, r.platform, r.placement, r.size]
+          .filter(Boolean)
+          .map((v) => `<span class="spec-chip">${escapeHtml(v)}</span>`)
+          .join('');
+
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
           <div class="card-head">
             <span class="mono muted">${new Date(r.created_at).toLocaleString()}</span>
-            <span class="status-tag ${r.status}">${r.status}</span>
+            <div class="card-meta">
+              ${specChips}
+              <span class="status-tag ${r.status}">${r.status}</span>
+            </div>
           </div>
-          <p><strong>${escapeHtml(r.prompt)}</strong></p>
+          <p style="margin-bottom:8px"><strong>${escapeHtml(r.prompt)}</strong></p>
           <div class="output-text">${escapeHtml(r.output || '')}</div>
         `;
         list.appendChild(card);
       });
     }
 
-    // Refresh history whenever that tab is opened
     document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory);
 
     // --- Init ---
     loadSidebar();
     loadPov();
     loadAssets();
+    loadSpecs();
   </script>
 </body>
 </html>

@@ -5,6 +5,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const db = require('./db');
 
 const brandsRouter = require('./routes/brands');
 const generateRouter = require('./routes/generate');
@@ -17,6 +18,11 @@ app.use(express.json({ limit: '2mb' }));
 // API routes
 app.use('/api/brands', brandsRouter);
 app.use('/api/brands', generateRouter);
+
+// Platform specs — powers the cascading dropdowns in the Generate tab
+app.get('/api/specs', (req, res) => {
+  res.json(db.prepare('SELECT * FROM platform_specs ORDER BY format, platform, placement, size').all());
+});
 
 // Frontend (plain HTML/CSS/JS, no build step)
 app.use(express.static(path.join(__dirname, 'public')));

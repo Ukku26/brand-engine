@@ -9,11 +9,11 @@ const db = require('../db');
 const { generate } = require('../lib/anthropic');
 const { buildSystemPrompt } = require('../lib/buildSystemPrompt');
 const { topAssets } = require('../lib/tfidf');
-const { inferMaxTokens } = require('../lib/maxTokens');
+const { inferMaxTokens, inferMaxTokensFromSpec } = require('../lib/maxTokens');
 
 router.post('/:brandId/generate', async (req, res) => {
   const { brandId } = req.params;
-  const { prompt } = req.body;
+  const { prompt, format, platform, placement, size } = req.body;
 
   if (!prompt || !prompt.trim()) {
     return res.status(400).json({ error: 'A prompt is required.' });
@@ -22,9 +22,12 @@ router.post('/:brandId/generate', async (req, res) => {
   const pov = db.prepare('SELECT * FROM brand_pov WHERE brand_id = ?').get(brandId);
   if (!pov) return res.status(404).json({ error: 'Brand not found.' });
 
-  // Approved past generations for this brand only - used as few-shot
-  // examples so the system gradually reflects what's actually been
-  // approved, without needing real fine-tuning.
+  // Resolve spec if all four selector values were sent
+  const spec = (format && platform && placement && size)
+    ? db.prepare('SELECT * FROM platform_specs WHERE format=? AND platform=? AND placement=? AND size=?')
+        .get(format, platform, placement, size)
+    : null;
+
   const approvedExamples = db
     .prepare(
       `SELECT prompt, output FROM generations
@@ -37,23 +40,29 @@ router.post('/:brandId/generate', async (req, res) => {
     .prepare('SELECT * FROM brand_assets WHERE brand_id = ? ORDER BY created_at DESC')
     .all(brandId);
 
-  // P2: Retrieve only the top-2 most relevant assets via TF cosine similarity
   const relevantAssets = topAssets(prompt.trim(), allAssets, 2);
 
-  // P2: Infer a sensible max_tokens ceiling from the prompt rather than always 2000
-  const maxTokens = inferMaxTokens(prompt.trim());
+  // Use spec-precise token budget when available, otherwise infer from prompt
+  const maxTokens = spec ? inferMaxTokensFromSpec(spec) : inferMaxTokens(prompt.trim());
 
-  // Pass approvedExamples into the system prompt (cached) instead of the user turn
-  const systemPrompt = buildSystemPrompt(pov, relevantAssets, approvedExamples);
+  const systemPrompt = buildSystemPrompt(pov, relevantAssets, approvedExamples, spec);
   const userPrompt = prompt.trim();
 
   try {
     const output = await generate(systemPrompt, userPrompt, maxTokens);
 
     const insert = db.prepare(
-      'INSERT INTO generations (brand_id, prompt, output) VALUES (?, ?, ?)'
+      `INSERT INTO generations (brand_id, prompt, output, format, platform, placement, size, content_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const result = insert.run(brandId, prompt.trim(), output);
+    const result = insert.run(
+      brandId, prompt.trim(), output,
+      spec ? spec.format : null,
+      spec ? spec.platform : null,
+      spec ? spec.placement : null,
+      spec ? spec.size : null,
+      spec ? spec.content_type : null
+    );
 
     const record = db.prepare('SELECT * FROM generations WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(record);
