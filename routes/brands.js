@@ -50,14 +50,14 @@ router.get('/:brandId/pov', (req, res) => {
 });
 
 router.put('/:brandId/pov', (req, res) => {
-  const { insights, core_values, beliefs, taste, judgement, pov_statement, voice_rules } = req.body;
+  const { insights, core_values, beliefs, taste, judgement, pov_statement, voice_rules, brand_book } = req.body;
 
-  // Clear pov_compiled so the next generation uses the raw fields until
-  // the async recompile below finishes and writes the new value.
+  // Clear pov_compiled so the next generation uses raw fields until
+  // the async recompile finishes.
   db.prepare(
     `UPDATE brand_pov SET
       insights = ?, core_values = ?, beliefs = ?, taste = ?,
-      judgement = ?, pov_statement = ?, voice_rules = ?, pov_compiled = NULL
+      judgement = ?, pov_statement = ?, voice_rules = ?, brand_book = ?, pov_compiled = NULL
      WHERE brand_id = ?`
   ).run(
     insights || '',
@@ -67,6 +67,7 @@ router.put('/:brandId/pov', (req, res) => {
     judgement || '',
     pov_statement || '',
     voice_rules || '',
+    brand_book || '',
     req.params.brandId
   );
 

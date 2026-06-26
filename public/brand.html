@@ -24,8 +24,8 @@
 
       <div class="tabs">
         <div class="tab active" data-tab="pov">Point of view</div>
-        <div class="tab" data-tab="assets">Reference material</div>
-        <div class="tab" data-tab="generate">Generate</div>
+        <div class="tab" data-tab="assets">Brand Assets</div>
+        <div class="tab" data-tab="briefs">Briefs</div>
         <div class="tab" data-tab="history">History</div>
       </div>
 
@@ -63,6 +63,10 @@
           <label>Voice rules</label>
           <textarea id="pov-voice_rules" placeholder="Tone of voice do's and don'ts."></textarea>
         </div>
+        <div class="field" style="border-top:1px solid var(--border);padding-top:18px;margin-top:4px">
+          <label>Brand Book & Guidelines</label>
+          <textarea id="pov-brand_book" style="min-height:160px" placeholder="Paste your full brand guidelines, visual identity rules, tone of voice document, or any standing reference material. This stays constant across all campaigns and briefs."></textarea>
+        </div>
         <button id="savePovBtn">Save point of view</button>
         <span class="muted" id="povSaveStatus" style="margin-left:10px"></span>
       </div>
@@ -70,8 +74,7 @@
       <!-- ASSETS TAB -->
       <div class="tab-panel" id="panel-assets">
         <p class="muted" style="margin-bottom:18px">
-          Paste in reference material - brand guidelines, past campaign copy, product info.
-          The generator reads all of this for context.
+          Paste in brand assets — guidelines, past campaign copy, product info. These are brand-level and available across all campaigns. For campaign-specific material, add it inside the brief.
         </p>
         <div class="card">
           <div class="field">
@@ -87,51 +90,19 @@
         <div id="assetList"></div>
       </div>
 
-      <!-- GENERATE TAB -->
-      <div class="tab-panel" id="panel-generate">
-        <p class="muted" style="margin-bottom:16px">
-          Pick the destination first — Claude gets exact format and length constraints, so the first output is almost always right.
+      <!-- BRIEFS TAB -->
+      <div class="tab-panel" id="panel-briefs">
+        <p class="muted" style="margin-bottom:18px">
+          Each brief is a campaign or project workspace — its own context, campaign assets, and generation history. Creation and approval within a brief trains the brand's voice for that campaign type.
         </p>
-
-        <div class="spec-grid">
-          <div class="field" style="margin-bottom:0">
-            <label>Format</label>
-            <select id="specFormat">
-              <option value="">— Any —</option>
-            </select>
+        <div class="card" style="margin-bottom:18px">
+          <div class="field">
+            <label>Brief name</label>
+            <input id="newBriefName" placeholder="e.g. Diwali 2026, Social Calendar Q3, Brand Film" />
           </div>
-          <div class="field" style="margin-bottom:0">
-            <label>Platform</label>
-            <select id="specPlatform" disabled>
-              <option value="">—</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <label>Placement</label>
-            <select id="specPlacement" disabled>
-              <option value="">—</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <label>Size / Duration</label>
-            <select id="specSize" disabled>
-              <option value="">—</option>
-            </select>
-          </div>
+          <button id="createBriefBtn">+ Create brief</button>
         </div>
-
-        <div class="spec-resolved" id="specResolved" style="display:none">
-          Claude will write: <strong id="specContentType"></strong>
-          <span class="muted" id="specDimLabel"></span>
-        </div>
-
-        <div class="field">
-          <label>Brief / idea</label>
-          <textarea id="generatePrompt" style="min-height:90px" placeholder="Describe the message, campaign angle, or brief. The spec above handles format and length — focus on the idea here."></textarea>
-        </div>
-        <button id="generateBtn">Generate</button>
-        <span class="muted" id="generateStatus" style="margin-left:10px"></span>
-        <div id="generateResult" style="margin-top:20px"></div>
+        <div id="briefsList"></div>
       </div>
 
       <!-- HISTORY TAB -->
@@ -184,7 +155,7 @@
     });
 
     // --- POV ---
-    const povFields = ['insights', 'core_values', 'beliefs', 'taste', 'judgement', 'pov_statement', 'voice_rules'];
+    const povFields = ['insights', 'core_values', 'beliefs', 'taste', 'judgement', 'pov_statement', 'voice_rules', 'brand_book'];
     async function loadPov() {
       const pov = await api(`/brands/${brandId}/pov`);
       povFields.forEach((f) => { document.getElementById(`pov-${f}`).value = pov[f] || ''; });
@@ -230,165 +201,53 @@
       loadAssets();
     });
 
-    // --- Spec selector (cascading dropdowns) ---
-    let allSpecs = [];
+    // --- Briefs ---
+    const OBJECTIVE_LABELS = {
+      reach: 'Maximise Reach', awareness: 'Brand Awareness',
+      'mental-availability': 'Mental Availability', engagement: 'Drive Engagement',
+      'lead-gen': 'Lead Generation', conversion: 'Immediate Purchase', retention: 'Retention & Loyalty',
+    };
 
-    async function loadSpecs() {
-      allSpecs = await api('/specs');
-      const formats = [...new Set(allSpecs.map((s) => s.format))].sort();
-      const fmtEl = document.getElementById('specFormat');
-      formats.forEach((f) => {
-        const opt = document.createElement('option');
-        opt.value = f;
-        opt.textContent = f.charAt(0).toUpperCase() + f.slice(1);
-        fmtEl.appendChild(opt);
-      });
-    }
-
-    function populateSelect(el, values, placeholder) {
-      el.innerHTML = `<option value="">${placeholder}</option>`;
-      values.forEach((v) => {
-        const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = v.charAt(0).toUpperCase() + v.slice(1);
-        el.appendChild(opt);
-      });
-      el.disabled = values.length === 0;
-    }
-
-    document.getElementById('specFormat').addEventListener('change', (e) => {
-      const fmt = e.target.value;
-      const platEl = document.getElementById('specPlatform');
-      const placeEl = document.getElementById('specPlacement');
-      const sizeEl = document.getElementById('specSize');
-
-      if (!fmt) {
-        populateSelect(platEl, [], '—');
-        populateSelect(placeEl, [], '—');
-        populateSelect(sizeEl, [], '—');
-        platEl.disabled = placeEl.disabled = sizeEl.disabled = true;
-        document.getElementById('specResolved').style.display = 'none';
+    async function loadBriefs() {
+      const briefs = await api(`/brands/${brandId}/briefs`);
+      const list = document.getElementById('briefsList');
+      list.innerHTML = '';
+      if (briefs.length === 0) {
+        list.innerHTML = '<p class="muted">No briefs yet — create one above to start a campaign.</p>';
         return;
       }
-      const platforms = [...new Set(allSpecs.filter((s) => s.format === fmt).map((s) => s.platform))].sort();
-      populateSelect(platEl, platforms, '— Pick platform —');
-      populateSelect(placeEl, [], '—');
-      populateSelect(sizeEl, [], '—');
-      placeEl.disabled = sizeEl.disabled = true;
-      document.getElementById('specResolved').style.display = 'none';
-    });
-
-    document.getElementById('specPlatform').addEventListener('change', (e) => {
-      const fmt = document.getElementById('specFormat').value;
-      const plat = e.target.value;
-      const placeEl = document.getElementById('specPlacement');
-      const sizeEl = document.getElementById('specSize');
-
-      if (!plat) {
-        populateSelect(placeEl, [], '—');
-        populateSelect(sizeEl, [], '—');
-        placeEl.disabled = sizeEl.disabled = true;
-        document.getElementById('specResolved').style.display = 'none';
-        return;
-      }
-      const placements = [...new Set(allSpecs.filter((s) => s.format === fmt && s.platform === plat).map((s) => s.placement))].sort();
-      populateSelect(placeEl, placements, '— Pick placement —');
-      populateSelect(sizeEl, [], '—');
-      sizeEl.disabled = true;
-      document.getElementById('specResolved').style.display = 'none';
-    });
-
-    document.getElementById('specPlacement').addEventListener('change', (e) => {
-      const fmt = document.getElementById('specFormat').value;
-      const plat = document.getElementById('specPlatform').value;
-      const place = e.target.value;
-      const sizeEl = document.getElementById('specSize');
-
-      if (!place) {
-        populateSelect(sizeEl, [], '—');
-        sizeEl.disabled = true;
-        document.getElementById('specResolved').style.display = 'none';
-        return;
-      }
-      const matches = allSpecs.filter((s) => s.format === fmt && s.platform === plat && s.placement === place);
-      sizeEl.innerHTML = '<option value="">— Pick size —</option>';
-      matches.forEach((s) => {
-        const opt = document.createElement('option');
-        opt.value = s.size;
-        opt.textContent = s.size_label;
-        sizeEl.appendChild(opt);
-      });
-      sizeEl.disabled = false;
-      document.getElementById('specResolved').style.display = 'none';
-    });
-
-    document.getElementById('specSize').addEventListener('change', (e) => {
-      const fmt = document.getElementById('specFormat').value;
-      const plat = document.getElementById('specPlatform').value;
-      const place = document.getElementById('specPlacement').value;
-      const size = e.target.value;
-
-      if (!size) { document.getElementById('specResolved').style.display = 'none'; return; }
-
-      const spec = allSpecs.find((s) => s.format === fmt && s.platform === plat && s.placement === place && s.size === size);
-      if (spec) {
-        document.getElementById('specContentType').textContent = spec.content_type;
-        document.getElementById('specDimLabel').textContent =
-          spec.dimensions !== '—' ? `· ${spec.dimensions}` : '';
-        document.getElementById('specResolved').style.display = 'flex';
-      }
-    });
-
-    // --- Generate ---
-    document.getElementById('generateBtn').addEventListener('click', async () => {
-      const prompt = document.getElementById('generatePrompt').value.trim();
-      if (!prompt) return;
-
-      const format   = document.getElementById('specFormat').value;
-      const platform = document.getElementById('specPlatform').value;
-      const placement= document.getElementById('specPlacement').value;
-      const size     = document.getElementById('specSize').value;
-
-      const status = document.getElementById('generateStatus');
-      const resultEl = document.getElementById('generateResult');
-      status.textContent = 'Generating…';
-      resultEl.innerHTML = '';
-
-      try {
-        const body = { prompt };
-        if (format && platform && placement && size) {
-          body.format = format; body.platform = platform;
-          body.placement = placement; body.size = size;
-        }
-
-        const result = await api(`/brands/${brandId}/generate`, {
-          method: 'POST',
-          body: JSON.stringify(body),
-        });
-
-        status.textContent = '';
-        resultEl.innerHTML = `
-          <div class="card">
-            ${result.content_type ? `<p class="muted" style="margin-bottom:8px">${escapeHtml(result.content_type)} · ${escapeHtml(result.platform || '')} ${escapeHtml(result.placement || '')} ${escapeHtml(result.size || '')}</p>` : ''}
-            <div class="output-text">${escapeHtml(result.output)}</div>
-            <div class="row" style="margin-top:12px">
-              <button data-status="approved" data-id="${result.id}">Approve</button>
-              <button class="secondary" data-status="rejected" data-id="${result.id}">Reject</button>
-            </div>
+      briefs.forEach((b) => {
+        const row = document.createElement('div');
+        row.className = 'brief-row';
+        row.innerHTML = `
+          <div>
+            <div class="brief-name">${escapeHtml(b.name)}</div>
+            <div class="brief-meta">${b.objective ? OBJECTIVE_LABELS[b.objective] || b.objective : 'No default objective'} · ${new Date(b.created_at).toLocaleDateString()}</div>
+          </div>
+          <div class="brief-right">
+            <span class="brief-status ${b.status}">${b.status}</span>
+            <button class="secondary" data-id="${b.id}" style="padding:4px 10px;font-size:12px">Delete</button>
           </div>
         `;
-        resultEl.querySelectorAll('button').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            await api(`/brands/${brandId}/generations/${btn.dataset.id}`, {
-              method: 'PUT',
-              body: JSON.stringify({ status: btn.dataset.status }),
-            });
-            resultEl.innerHTML = `<p class="muted">Marked as ${btn.dataset.status}.</p>`;
-          });
+        row.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          window.location.href = `/brief.html?brand=${brandId}&brief=${b.id}`;
         });
-      } catch (err) {
-        status.textContent = err.message;
-      }
+        row.querySelector('button').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete brief "${b.name}"? This removes all its generations too.`)) return;
+          await api(`/brands/${brandId}/briefs/${b.id}`, { method: 'DELETE' });
+          loadBriefs();
+        });
+        list.appendChild(row);
+      });
+    }
+
+    document.getElementById('createBriefBtn').addEventListener('click', async () => {
+      const name = document.getElementById('newBriefName').value.trim();
+      if (!name) return;
+      const brief = await api(`/brands/${brandId}/briefs`, { method: 'POST', body: JSON.stringify({ name }) });
+      window.location.href = `/brief.html?brand=${brandId}&brief=${brief.id}`;
     });
 
     // --- History ---
@@ -397,7 +256,7 @@
       const list = document.getElementById('historyList');
       list.innerHTML = '';
       if (rows.length === 0) {
-        list.innerHTML = '<p class="muted">No generations yet.</p>';
+        list.innerHTML = '<p class="muted">No generations yet. Open a brief and start generating.</p>';
         return;
       }
       rows.forEach((r) => {
@@ -405,16 +264,16 @@
           .filter(Boolean)
           .map((v) => `<span class="spec-chip">${escapeHtml(v)}</span>`)
           .join('');
+        const objChip = r.objective
+          ? `<span class="obj-chip">${escapeHtml(OBJECTIVE_LABELS[r.objective] || r.objective)}</span>`
+          : '';
 
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
           <div class="card-head">
             <span class="mono muted">${new Date(r.created_at).toLocaleString()}</span>
-            <div class="card-meta">
-              ${specChips}
-              <span class="status-tag ${r.status}">${r.status}</span>
-            </div>
+            <div class="card-meta">${specChips}${objChip}<span class="status-tag ${r.status}">${r.status}</span></div>
           </div>
           <p style="margin-bottom:8px"><strong>${escapeHtml(r.prompt)}</strong></p>
           <div class="output-text">${escapeHtml(r.output || '')}</div>
@@ -424,12 +283,12 @@
     }
 
     document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory);
+    document.querySelector('[data-tab="briefs"]').addEventListener('click', loadBriefs);
 
     // --- Init ---
     loadSidebar();
     loadPov();
     loadAssets();
-    loadSpecs();
   </script>
 </body>
 </html>

@@ -9,6 +9,7 @@ const db = require('./db');
 
 const brandsRouter = require('./routes/brands');
 const generateRouter = require('./routes/generate');
+const briefsRouter = require('./routes/briefs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,7 @@ app.use(express.json({ limit: '2mb' }));
 // API routes
 app.use('/api/brands', brandsRouter);
 app.use('/api/brands', generateRouter);
+app.use('/api/brands', briefsRouter);
 
 // Platform specs — powers the cascading dropdowns in the Generate tab
 app.get('/api/specs', (req, res) => {

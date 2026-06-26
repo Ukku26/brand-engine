@@ -76,17 +76,43 @@ db.exec(`
     content_type TEXT NOT NULL,
     UNIQUE(format, platform, placement, size)
   );
+
+  -- Campaign briefs: a named container for a campaign or project.
+  -- Each brief belongs to a brand and carries its own context and assets.
+  CREATE TABLE IF NOT EXISTS briefs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_id    INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    context     TEXT DEFAULT '',
+    objective   TEXT DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'active', -- active | completed | archived
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Brief-specific reference material (campaign brief, mood board notes, etc).
+  CREATE TABLE IF NOT EXISTS brief_assets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    brief_id    INTEGER NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+    brand_id    INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    embedding   TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Schema migrations — ADD COLUMN fails silently if column already exists
 [
   'ALTER TABLE brand_assets ADD COLUMN embedding TEXT',
   'ALTER TABLE brand_pov    ADD COLUMN pov_compiled TEXT',
+  'ALTER TABLE brand_pov    ADD COLUMN brand_book TEXT DEFAULT \'\'',
   'ALTER TABLE generations  ADD COLUMN format TEXT',
   'ALTER TABLE generations  ADD COLUMN platform TEXT',
   'ALTER TABLE generations  ADD COLUMN placement TEXT',
   'ALTER TABLE generations  ADD COLUMN size TEXT',
   'ALTER TABLE generations  ADD COLUMN content_type TEXT',
+  'ALTER TABLE generations  ADD COLUMN brief_id INTEGER',
+  'ALTER TABLE generations  ADD COLUMN objective TEXT',
 ].forEach((sql) => { try { db.exec(sql); } catch (_) {} });
 
 // Seed platform_specs (INSERT OR IGNORE = idempotent re-runs)
