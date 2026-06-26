@@ -8,6 +8,8 @@ const router = express.Router();
 const db = require('../db');
 const { generate } = require('../lib/anthropic');
 const { buildSystemPrompt } = require('../lib/buildSystemPrompt');
+const { topAssets } = require('../lib/tfidf');
+const { inferMaxTokens } = require('../lib/maxTokens');
 
 router.post('/:brandId/generate', async (req, res) => {
   const { brandId } = req.params;
@@ -31,22 +33,22 @@ router.post('/:brandId/generate', async (req, res) => {
     )
     .all(brandId);
 
-  const assets = db
+  const allAssets = db
     .prepare('SELECT * FROM brand_assets WHERE brand_id = ? ORDER BY created_at DESC')
     .all(brandId);
 
-  const systemPrompt = buildSystemPrompt(pov, assets);
+  // P2: Retrieve only the top-2 most relevant assets via TF cosine similarity
+  const relevantAssets = topAssets(prompt.trim(), allAssets, 2);
 
-  let userPrompt = prompt.trim();
-  if (approvedExamples.length > 0) {
-    const examplesText = approvedExamples
-      .map((ex, i) => `Example ${i + 1}\nRequest: ${ex.prompt}\nApproved output: ${ex.output}`)
-      .join('\n\n');
-    userPrompt = `Here are some previously approved outputs for this brand, for reference on tone and quality:\n\n${examplesText}\n\n---\n\nNew request: ${prompt.trim()}`;
-  }
+  // P2: Infer a sensible max_tokens ceiling from the prompt rather than always 2000
+  const maxTokens = inferMaxTokens(prompt.trim());
+
+  // Pass approvedExamples into the system prompt (cached) instead of the user turn
+  const systemPrompt = buildSystemPrompt(pov, relevantAssets, approvedExamples);
+  const userPrompt = prompt.trim();
 
   try {
-    const output = await generate(systemPrompt, userPrompt);
+    const output = await generate(systemPrompt, userPrompt, maxTokens);
 
     const insert = db.prepare(
       'INSERT INTO generations (brand_id, prompt, output) VALUES (?, ?, ?)'

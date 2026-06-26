@@ -63,4 +63,10 @@ db.exec(`
   );
 `);
 
+// Schema migrations — ADD COLUMN fails silently if column already exists
+[
+  'ALTER TABLE brand_assets ADD COLUMN embedding TEXT',
+  'ALTER TABLE brand_pov    ADD COLUMN pov_compiled TEXT',
+].forEach((sql) => { try { db.exec(sql); } catch (_) {} });
+
 module.exports = db;

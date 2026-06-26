@@ -7,6 +7,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { buildEmbedding } = require('../lib/tfidf');
+const { compilePov } = require('../lib/anthropic');
 
 // --- Brands ---------------------------------------------------------
 
@@ -50,10 +52,12 @@ router.get('/:brandId/pov', (req, res) => {
 router.put('/:brandId/pov', (req, res) => {
   const { insights, core_values, beliefs, taste, judgement, pov_statement, voice_rules } = req.body;
 
+  // Clear pov_compiled so the next generation uses the raw fields until
+  // the async recompile below finishes and writes the new value.
   db.prepare(
     `UPDATE brand_pov SET
       insights = ?, core_values = ?, beliefs = ?, taste = ?,
-      judgement = ?, pov_statement = ?, voice_rules = ?
+      judgement = ?, pov_statement = ?, voice_rules = ?, pov_compiled = NULL
      WHERE brand_id = ?`
   ).run(
     insights || '',
@@ -68,6 +72,18 @@ router.put('/:brandId/pov', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM brand_pov WHERE brand_id = ?').get(req.params.brandId);
   res.json(updated);
+
+  // P3: Compile the POV into a dense paragraph in the background.
+  // Don't await — the save response has already gone back to the client.
+  compilePov(updated).then((compiled) => {
+    if (compiled) {
+      db.prepare('UPDATE brand_pov SET pov_compiled = ? WHERE brand_id = ?')
+        .run(compiled, req.params.brandId);
+      console.log(`[pov] compiled for brand ${req.params.brandId} (${compiled.length} chars)`);
+    }
+  }).catch((err) => {
+    console.warn('[pov] compile failed (will use raw fields):', err.message);
+  });
 });
 
 // --- Asset layer -------------------------------------------------------
@@ -85,10 +101,13 @@ router.post('/:brandId/assets', (req, res) => {
     return res.status(400).json({ error: 'Title and content are both required.' });
   }
 
+  // P2: Build a TF vector from title + content and store it for RAG retrieval
+  const embedding = buildEmbedding(`${title} ${content}`);
+
   const insert = db.prepare(
-    'INSERT INTO brand_assets (brand_id, title, content) VALUES (?, ?, ?)'
+    'INSERT INTO brand_assets (brand_id, title, content, embedding) VALUES (?, ?, ?, ?)'
   );
-  const result = insert.run(req.params.brandId, title.trim(), content);
+  const result = insert.run(req.params.brandId, title.trim(), content, embedding);
 
   const asset = db.prepare('SELECT * FROM brand_assets WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(asset);
