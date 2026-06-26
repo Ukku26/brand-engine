@@ -14,7 +14,10 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'data.db'));
+// On Railway, RAILWAY_VOLUME_MOUNT_PATH points to a persistent disk.
+// Locally it's unset, so we fall back to the project root.
+const DB_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname;
+const db = new Database(path.join(DB_DIR, 'data.db'));
 
 // WAL mode = better performance, avoids some "database is locked" errors
 db.pragma('journal_mode = WAL');
